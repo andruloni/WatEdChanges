@@ -1,9 +1,10 @@
-import io
+# -*- coding: utf-8 -*-
+import StringIO
 import requests
 import csv
-import logging
 from bs4 import BeautifulSoup
 import time
+from requests.packages.urllib3.exceptions import ConnectionError
 
 
 class WatEdApi:
@@ -24,6 +25,7 @@ class WatEdApi:
 
     def _debug(self):
         import http.client as http_client
+        import logging
         http_client.HTTPConnection.debuglevel = 1
         logging.basicConfig(level=logging.DEBUG)
         requests_log = logging.getLogger("requests.packages.urllib3")
@@ -31,7 +33,6 @@ class WatEdApi:
         requests_log.propagate = True
 
     def __init__(self, login, password, debug=False):
-        assert type(login and password) == str
         self.user_login = login
         self.user_password = password
         self.session_string = ''
@@ -39,7 +40,6 @@ class WatEdApi:
             self._debug()
 
     def _downloadFile(self, download_url):
-        file = None
         resp = None
 
         """ nasz ed jest tak genialny ze trzeba odczekac jakis czas od zalogowania zanim wysle sie request o export,
@@ -58,16 +58,15 @@ class WatEdApi:
             # odstep miedzy requestami. Moze ed jest kobieta i nie jest jeszcze "gotowy" :P
             time.sleep(5)
 
-        self.csv_string = resp.content.decode('windows-1250')
-        # nie ma to jak jedyne słuszne kodowanie
+        self.csv_string = resp.content
 
         if len(self.csv_string) == 0 or not self.csv_string.startswith('Temat'):
             raise ConnectionError('Cannot download schedule')
 
         if resp.ok:
-            file = io.StringIO(self.csv_string)
-
-        return file
+            return StringIO.StringIO(self.csv_string)
+        else:
+            return None
 
     def getGroupCalendarFile(self, group_id, group_symbol):
 

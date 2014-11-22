@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import os
 import sys
 from DictDiffer import DictDiffer
@@ -8,13 +10,16 @@ import csv
 
 def getGroupCalendarDictFromFile(path):
 
-    file = csv.DictReader(open(path, encoding='utf-8'))
+    dict_reader = csv.DictReader(open(path))
 
     ret_dict = {}
-    for row in file:
+    for row in dict_reader:
         tmp = dict(row)
-        del tmp['Temat']
-        ret_dict[row['Temat']] = tmp
+
+        # don't ask why...
+        temat = ('Temat' if 'Temat' in tmp else '﻿Temat')
+        del tmp[temat]
+        ret_dict[row[temat]] = tmp
 
     return ret_dict
 
@@ -49,7 +54,7 @@ if __name__ == "__main__":
         to_remove = dict_diff.removed()
 
     else:
-        file = open(file_path, mode='w', encoding='utf-8')
-        file.write(wat_api.csv_string)
-        file.close()
+        schedule_file = open(file_path, mode='w')
+        schedule_file.write(wat_api.csv_string)
+        schedule_file.close()
 
