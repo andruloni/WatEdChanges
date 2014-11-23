@@ -9,12 +9,6 @@ from requests.packages.urllib3.exceptions import ConnectionError
 
 class WatEdApi:
     url = 'https://s1.wcy.wat.edu.pl/ed/'
-    user_login = None
-    user_password = None
-    logged = False
-    session_string = None
-    csv_string = None
-    csv_file = None
 
     headers = {
                 'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:33.0) Gecko/20100101 Firefox/33.0',
@@ -24,9 +18,9 @@ class WatEdApi:
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'}
 
     def _debug(self):
-        import http.client as http_client
+        import httplib
         import logging
-        http_client.HTTPConnection.debuglevel = 1
+        httplib.HTTPConnection.debuglevel = 1
         logging.basicConfig(level=logging.DEBUG)
         requests_log = logging.getLogger("requests.packages.urllib3")
         requests_log.setLevel(logging.DEBUG)
@@ -103,10 +97,10 @@ class WatEdApi:
 
     def getGroupCalendarDict(self, group_id, group_symbol):
 
-        file = self.getGroupCalendar(group_id, group_symbol)
+        dict_reder = self.getGroupCalendar(group_id, group_symbol)
 
         ret_dict = {}
-        for row in file:
+        for row in dict_reder:
             tmp = dict(row)
             del tmp['Temat']
             ret_dict[row['Temat']] = tmp

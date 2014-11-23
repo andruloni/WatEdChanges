@@ -1,15 +1,14 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os
 import sys
 from DictDiffer import DictDiffer
+from GoogleCalendar import GoogleCalendar
 from WatEdApi import WatEdApi
 import configparser
 import csv
 
 
 def getGroupCalendarDictFromFile(path):
-
     dict_reader = csv.DictReader(open(path))
 
     ret_dict = {}
@@ -32,28 +31,55 @@ if __name__ == "__main__":
     else:
         exit(1)
 
-    dir_path = config['ed']['dir_path']
-    group_id = config['ed']['group_id']
-    group_symbol = config['ed']['group_symbol']
-    login = config['ed']['login']
-    password = config['ed']['password']
+    ed = config['ed']
+    group_symbol = ed['group_symbol']
 
-    file_path = '%s/%s_%s.csv' % (dir_path, group_id, group_symbol)
-
-    wat_api = WatEdApi(login, password, debug=False)
+    wat_api = WatEdApi(ed['login'], ed['password'], debug=True)
     wat_api.connect()
-    new_dict = wat_api.getGroupCalendarDict(group_id=group_id, group_symbol=group_symbol)
+    new_dict = wat_api.getGroupCalendarDict(group_id=ed['group_id'], group_symbol=ed['group_symbol'])
 
-    if os.path.exists(file_path):
-        old_dict = getGroupCalendarDictFromFile(file_path)
+    file_path = '%s/%s.csv' % (ed['plan_path'], ed['group_symbol'])
+    old_dict = getGroupCalendarDictFromFile(file_path) if os.path.exists(file_path) else {}
+    dict_diff = DictDiffer(new_dict, old_dict)
 
-        dict_diff = DictDiffer(new_dict, old_dict)
+    changes = {'to_add': dict_diff.added(), 'to_modify': dict_diff.changed(), 'to_remove': dict_diff.removed()}
 
-        to_add = dict_diff.added()
-        to_modify = dict_diff.changed()
-        to_remove = dict_diff.removed()
+    for k, v in changes.items():
+        if len(v) == 0:
+            del changes[k]
 
-    else:
+    if len(changes) > 0:
+        google = config['google']
+
+        event_dict_file = '%s/%s.json' % (google['calendars_config_dir'], group_symbol)
+
+        g_cal = GoogleCalendar(google['key_path'], google['mail'])
+
+        if group_symbol in google:
+            g_cal.setCalendar(google[group_symbol], event_dict_file)
+        else:  # cal adress don't exist, create one
+            cal_id = g_cal.createCalendar(group_symbol)
+            g_cal.setCalendar(cal_id, event_dict_file)
+
+            acl_id = g_cal.shareCalendarWithGroup(google['share_%s' % (group_symbol if 'share_%s' % group_symbol in google else 'def')])
+
+            config.set('google', group_symbol, str(cal_id))
+            config.set('google', 'acl_%s' % group_symbol, str(acl_id))
+            # save config
+            with open(sys.argv[1], 'w') as f:
+                config.write(f)
+
+        if 'to_add' in changes:
+            g_cal.addScheduleEvents(changes['to_add'], new_dict)
+
+        if 'to_modify' in changes:
+            g_cal.modifyScheduleEvents(changes['to_modify'], old_dict, new_dict)
+
+        if 'to_remove' in changes:
+            g_cal.removeScheduleEvents(changes['to_modify'])
+
+        g_cal.commitChanges()
+        g_cal.end()
         schedule_file = open(file_path, mode='w')
         schedule_file.write(wat_api.csv_string)
         schedule_file.close()
