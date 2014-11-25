@@ -6,7 +6,9 @@ from googleapiclient.http import BatchHttpRequest
 import httplib2
 from googleapiclient.discovery import build
 from oauth2client.client import SignedJwtAssertionCredentials
+from DictDiffer import DictDiffer
 import rfc3339
+
 
 class GoogleCalendar:
 
@@ -36,7 +38,7 @@ class GoogleCalendar:
         self._event_name_to_id_dict = None
         self._service_mail = service_account_mail
 
-    def commitChanges(self):
+    def pushChanges(self):
         self._batch.execute(http=self._http)
 
     def eventAdded(self, request_id, response, exception):
@@ -46,37 +48,44 @@ class GoogleCalendar:
         else:
             pass
 
+    def eventModified(self, request_id, response, exception):
+        pass
+
+    def _convertDateTime(self, date, time):
+        return rfc3339.rfc3339(datetime.datetime(int(date[:4]),
+                                                 int(date[5:7]),
+                                                 int(date[8:10]),
+                                                 int(time[:2]),
+                                                 int(time[3:5])))
+
+    def _eventStartDateTime(self, event_details):
+        return self._convertDateTime(event_details[u'Data rozpoczęcia'.encode('windows-1250')],
+                                     event_details[u'Czas rozpoczęcia'.encode('windows-1250')])
+
+    def _eventEndDateTime(self, event_details):
+        return self._convertDateTime(event_details[u'Data zakończenia'.encode('windows-1250')],
+                                     event_details[u'Czas zakończenia'.encode('windows-1250')])
+
+    def _eventLocation(self, event_details):
+        return event_details[u'Lokalizacja'.encode('windows-1250')]
+
     def addScheduleEvents(self, event_names, event_details):
 
         for ev_name in event_names:
-            s_date = event_details[ev_name][u'Data rozpoczęcia'.encode('windows-1250')]
-            s_time = event_details[ev_name][u'Czas rozpoczęcia'.encode('windows-1250')]
-
-            e_date = event_details[ev_name][u'Data zakończenia'.encode('windows-1250')]
-            e_time = event_details[ev_name][u'Czas zakończenia'.encode('windows-1250')]
+            ev_det = event_details[ev_name]
 
             event = {
                 'summary': ev_name.decode('windows-1250'),
 
                 'start': {
-                    'dateTime': rfc3339.rfc3339(datetime.datetime(int(s_date[:4]),
-                                                                  int(s_date[5:7]),
-                                                                  int(s_date[8:10]),
-                                                                  int(s_time[:2]),
-                                                                  int(s_time[3:5])))
+                    'dateTime': self._eventStartDateTime(ev_det)
                 },
                 'end': {
-                    'dateTime': rfc3339.rfc3339(datetime.datetime(int(e_date[:4]),
-                                                                  int(e_date[5:7]),
-                                                                  int(e_date[8:10]),
-                                                                  int(e_time[:2]),
-                                                                  int(e_time[3:5])))
+                    'dateTime': self._eventEndDateTime(ev_det)
                 },
             }
 
-            loc = event_details[ev_name][u'Lokalizacja'.encode('windows-1250')]
-
-            # sprawdzic co to jest null np przy jezykach
+            loc = self._eventLocation(ev_det)
             if loc is not None:
                 event['location'] = loc
 
@@ -92,16 +101,42 @@ class GoogleCalendar:
                 col = '1'
 
             event['colorId'] = col
-            self._batch.add(self._service.events().insert(calendarId=self._calendar_id, body=event), callback=self.eventAdded, request_id=ev_name)
+            self._batch.add(self._service.events().insert(calendarId=self._calendar_id,
+                                                          body=event), callback=self.eventAdded, request_id=ev_name)
 
-    def modifyScheduleEvents(self, event_name, old_event_details, new_event_details):
-        pass
+    def modifyScheduleEvents(self, event_names, new_event_details):
 
-    def removeScheduleEvents(self, event_name):
-        pass
+        for ev_name in event_names:
+            ev_det = new_event_details[ev_name]
 
-    def mailAboutChanges(self, mail):
-        pass
+            patch = {
+                'start': {
+                    'dateTime': self._eventStartDateTime(ev_det)
+                },
+                'end': {
+                    'dateTime': self._eventEndDateTime(ev_det)
+                },
+            }
+
+            loc = self._eventLocation(ev_det)
+            if loc is not None:
+                patch['location'] = loc
+
+            self._batch.add(self._service.events().patch(calendarId=self._calendar_id,
+                                                         eventId=self._event_name_to_id_dict[ev_name.decode('windows-1250')],
+                                                         body=patch), callback=self.eventModified, request_id=ev_name)
+
+    def removeScheduleEvents(self, event_names):
+        #TODO usuwanie z jsona lub dawanie gdzieś idziej informacji o usunięciu
+        for ev_name in event_names:
+
+            patch = {
+                'status': 'cancelled'
+            }
+
+            self._batch.add(self._service.events().patch(calendarId=self._calendar_id,
+                                                         eventId=self._event_name_to_id_dict[ev_name.decode('windows-1250')],
+                                                         body=patch), callback=self.eventModified, request_id=ev_name)
 
     def createCalendar(self, name):
         calendar = {
@@ -124,32 +159,30 @@ class GoogleCalendar:
                 'type': 'group',
                 'value': email,
             },
-            'role': 'reader'
+            'role': 'group'
         }
 
         created_rule = self._service.acl().insert(calendarId=self._calendar_id, body=rule).execute()
-
         return created_rule['id']
 
     def shareCalendarWithOwner(self, email):
-        grant = {
+        rule = {
             'scope': {
                 'type': 'user',
                 'value': email,
             },
             'role': 'owner'
         }
-        created_rule = self._service.acl().insert(calendarId=self._calendar_id, body=grant).execute()
+        created_rule = self._service.acl().insert(calendarId=self._calendar_id, body=rule).execute()
         return created_rule['id']
 
-    def deletePrivileges(self, acl_id):
+    def deletePrivilege(self, acl_id):
         self._service.acl().delete(calendarId=self._calendar_id, ruleId=acl_id).execute()
 
     def clearCalendar(self):
-        self._service.calendars().clear(calendarId=self._calendar_id).execute()
+        pass
 
     def end(self):
         json_file = open(self._event_json_path, mode='w')
-        # ensure_ascii=False cause of utf coding problems
         json_file.write(json.dumps(self._event_name_to_id_dict, encoding='windows-1250'))
         json_file.close()

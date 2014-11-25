@@ -22,6 +22,16 @@ def getGroupCalendarDictFromFile(path):
 
     return ret_dict
 
+
+def isSomethinkTodo(changes):
+
+    ret = False
+    for key, val in changes.items():
+        if len(val) > 0:
+            ret = True
+
+    return ret
+
 if __name__ == "__main__":
 
     config = configparser.ConfigParser()
@@ -44,11 +54,7 @@ if __name__ == "__main__":
 
     changes = {'to_add': dict_diff.added(), 'to_modify': dict_diff.changed(), 'to_remove': dict_diff.removed()}
 
-    for k, v in changes.items():
-        if len(v) == 0:
-            del changes[k]
-
-    if len(changes) > 0:
+    if isSomethinkTodo(changes):
         google = config['google']
 
         event_dict_file = '%s/%s.json' % (google['calendars_config_dir'], group_symbol)
@@ -57,14 +63,16 @@ if __name__ == "__main__":
 
         if group_symbol in google:
             g_cal.setCalendar(google[group_symbol], event_dict_file)
-        else:  # cal adress don't exist, create one
+        else:  # cal adress don't exist, create new cal
             cal_id = g_cal.createCalendar(group_symbol)
             g_cal.setCalendar(cal_id, event_dict_file)
 
             acl_id = g_cal.shareCalendarWithGroup(google['share_%s' % (group_symbol if 'share_%s' % group_symbol in google else 'def')])
+            acl_adm = g_cal.shareCalendarWithOwner(google['share_%s' % (group_symbol if 'admin_%s' % group_symbol in google else 'def')])
 
             config.set('google', group_symbol, str(cal_id))
-            config.set('google', 'acl_%s' % group_symbol, str(acl_id))
+            config.set('google', 'group_share_%s' % group_symbol, str(acl_id))
+            config.set('google', 'group_admin_%s' % group_symbol, str(acl_adm))
             # save config
             with open(sys.argv[1], 'w') as f:
                 config.write(f)
@@ -73,12 +81,15 @@ if __name__ == "__main__":
             g_cal.addScheduleEvents(changes['to_add'], new_dict)
 
         if 'to_modify' in changes:
-            g_cal.modifyScheduleEvents(changes['to_modify'], old_dict, new_dict)
+            g_cal.modifyScheduleEvents(changes['to_modify'], new_dict)
 
         if 'to_remove' in changes:
-            g_cal.removeScheduleEvents(changes['to_modify'])
+            if len(changes['to_remove']) < 3:
+                g_cal.removeScheduleEvents(changes['to_remove'])
+            else:
+                pass #TODO add log messege
 
-        g_cal.commitChanges()
+        g_cal.pushChanges()
         g_cal.end()
         schedule_file = open(file_path, mode='w')
         schedule_file.write(wat_api.csv_string)
