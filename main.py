@@ -34,64 +34,73 @@ def isSomethinkTodo(changes):
 
 if __name__ == "__main__":
 
-    config = configparser.ConfigParser()
+    script_cfg = configparser.ConfigParser()
 
     if len(sys.argv) == 2:
-        config.read(sys.argv[1])
+        script_cfg.read(sys.argv[1])
     else:
         exit(1)
 
-    ed = config['ed']
-    group_symbol = ed['group_symbol']
-
+    ed = script_cfg['ed']
     wat_api = WatEdApi(ed['login'], ed['password'], debug=True)
     wat_api.connect()
-    new_dict = wat_api.getGroupCalendarDict(group_id=ed['group_id'], group_symbol=ed['group_symbol'])
 
-    file_path = '%s/%s.csv' % (ed['plan_path'], ed['group_symbol'])
-    old_dict = getGroupCalendarDictFromFile(file_path) if os.path.exists(file_path) else {}
-    dict_diff = DictDiffer(new_dict, old_dict)
+    google = script_cfg['google']
+    g_cal = GoogleCalendar(google['key_path'], google['mail'])
 
-    changes = {'to_add': dict_diff.added(), 'to_modify': dict_diff.changed(), 'to_remove': dict_diff.removed()}
+    emails = script_cfg['emails']
 
-    if isSomethinkTodo(changes):
-        google = config['google']
+    id_cfg = configparser.ConfigParser()
+    id_cfg.read(google['id_file'])
 
-        event_dict_file = '%s/%s.json' % (google['calendars_config_dir'], group_symbol)
+    calendars = id_cfg['calendars'] if 'calendars' in id_cfg else {}
 
-        g_cal = GoogleCalendar(google['key_path'], google['mail'])
+    groups = script_cfg['groups']
+    for group_symbol, group_id in groups.items():
 
-        if group_symbol in google:
-            g_cal.setCalendar(google[group_symbol], event_dict_file)
-        else:  # cal adress don't exist, create new cal
-            cal_id = g_cal.createCalendar(group_symbol)
-            g_cal.setCalendar(cal_id, event_dict_file)
+        new_dict = wat_api.getGroupCalendarDict(group_id, group_symbol)
 
-            acl_id = g_cal.shareCalendarWithGroup(google['share_%s' % (group_symbol if 'share_%s' % group_symbol in google else 'def')])
-            acl_adm = g_cal.shareCalendarWithOwner(google['share_%s' % (group_symbol if 'admin_%s' % group_symbol in google else 'def')])
+        file_path = '%s/%s.csv' % (ed['plan_path'], group_symbol)
+        old_dict = getGroupCalendarDictFromFile(file_path) if os.path.exists(file_path) else {}
 
-            config.set('google', group_symbol, str(cal_id))
-            config.set('google', 'group_share_%s' % group_symbol, str(acl_id))
-            config.set('google', 'group_admin_%s' % group_symbol, str(acl_adm))
-            # save config
-            with open(sys.argv[1], 'w') as f:
-                config.write(f)
+        dict_diff = DictDiffer(new_dict, old_dict)
+        changes = {'to_add': dict_diff.added(), 'to_modify': dict_diff.changed(), 'to_remove': dict_diff.removed()}
 
-        if 'to_add' in changes:
-            g_cal.addScheduleEvents(changes['to_add'], new_dict)
+        if isSomethinkTodo(changes):
 
-        if 'to_modify' in changes:
-            g_cal.modifyScheduleEvents(changes['to_modify'], new_dict)
+            event_dict_file = '%s/%s.json' % (google['calendars_json_dir'], group_symbol)
 
-        if 'to_remove' in changes:
-            if len(changes['to_remove']) < 3:
-                g_cal.removeScheduleEvents(changes['to_remove'])
-            else:
-                pass #TODO add log messege
+            if group_symbol in calendars:
+                g_cal.setCalendar(calendars[group_symbol], event_dict_file)
+            else:  # cal adress don't exist, create new cal
+                cal_id = g_cal.createCalendar(group_symbol)
+                g_cal.setCalendar(cal_id, event_dict_file)
 
-        g_cal.pushChanges()
-        g_cal.end()
-        schedule_file = open(file_path, mode='w')
-        schedule_file.write(wat_api.csv_string)
-        schedule_file.close()
+                acl_adm_id = g_cal.shareCalendarWithOwner(emails['admin_%s' % (group_symbol if 'admin_%s' % group_symbol in emails else 'default')])
+                acl_grp_id = g_cal.shareCalendarWithGroup(emails[group_symbol if group_symbol in emails else 'default'])
 
+                id_cfg.set('calendars', group_symbol, str(cal_id))
+                id_cfg.set('acl', 'own_%s' % group_symbol, str(acl_adm_id))
+                id_cfg.set('acl', 'grp_%s' % group_symbol, str(acl_grp_id))
+
+                # save config
+                with open(google['id_file'], 'w') as f:
+                    id_cfg.write(f)
+
+            if 'to_add' in changes:
+                g_cal.addScheduleEvents(changes['to_add'], new_dict)
+
+            if 'to_modify' in changes:
+                g_cal.modifyScheduleEvents(changes['to_modify'], new_dict)
+
+            if 'to_remove' in changes:
+                if len(changes['to_remove']) < 3:
+                    g_cal.removeScheduleEvents(changes['to_remove'])
+                else:
+                    pass #TODO add log messege
+
+            g_cal.pushChanges()
+            g_cal.end()
+            schedule_file = open(file_path, mode='w')
+            schedule_file.write(wat_api.csv_string)
+            schedule_file.close()
