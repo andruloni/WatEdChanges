@@ -1,6 +1,29 @@
 [ed]
-dir_path = /home/apps/plan
-group_id = 32552
-group_symbol = a1b2c3
-login = 4321234
+; path where csv files will be stored for compare proposes
+plan_path = /home/app/plan/
+login = 1234567890
 password = pass
+
+[groups]
+; key value paris Group_symbol=Group_id
+a1b2c3 = 32552
+
+[google]
+; service account key
+key_path = /home/app/key.p12
+; service account mail
+mail = example@developer.gserviceaccount.com
+; calendars configs ( key(event name)->value(google cal id) json files )
+calendars_json_dir = /home/app/plan/
+; config file to store calendars/acl ids file must exist with correct tags
+id_file = /home/app/google_config
+
+[emails]
+; default share mail
+default = default@gmail.com
+
+; group emails
+a1b2c3 = group@googlegroups.com
+
+; admin emails
+admin_a1b2c3 = a1b2c3.admin@gmail.com
