@@ -6,7 +6,6 @@ from googleapiclient.http import BatchHttpRequest
 import httplib2
 from googleapiclient.discovery import build
 from oauth2client.client import SignedJwtAssertionCredentials
-from DictDiffer import DictDiffer
 import rfc3339
 
 
@@ -46,10 +45,13 @@ class GoogleCalendar:
         if exception is None:
             self._event_name_to_id_dict[request_id] = response['id']
         else:
-            pass
+            pass  # TODO add log message
 
     def eventModified(self, request_id, response, exception):
-        pass
+        if exception is None:
+            self._event_name_to_id_dict[request_id] = response['id']
+        else:
+            pass  # TODO add log message
 
     def _convertDateTime(self, date, time):
         return rfc3339.rfc3339(datetime.datetime(int(date[:4]),
@@ -182,12 +184,15 @@ class GoogleCalendar:
     def clearCalendar(self):
         pass
 
+    def removeCalendar(self):
+        self._service.calendarList().delete(calendarId=self._calendar_id).execute()
+
     def removeAllCalendars(self):
         page_token = None
         while True:
             calendar_list = self._service.calendarList().list(pageToken=page_token).execute()
             for calendar_list_entry in calendar_list['items']:
-                self._service.calendarList().delete(calendarId=calendar_list_entry['id'])
+                self._service.calendarList().delete(calendarId=calendar_list_entry['id']).execute()
             page_token = calendar_list.get('nextPageToken')
             if not page_token:
                 break

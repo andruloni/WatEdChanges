@@ -17,21 +17,10 @@ class WatEdApi:
                 'Connection': 'keep-alive',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'}
 
-    def _debug(self):
-        import httplib
-        import logging
-        httplib.HTTPConnection.debuglevel = 1
-        logging.basicConfig(level=logging.DEBUG)
-        requests_log = logging.getLogger("requests.packages.urllib3")
-        requests_log.setLevel(logging.DEBUG)
-        requests_log.propagate = True
-
-    def __init__(self, login, password, debug=False):
+    def __init__(self, login, password):
         self.user_login = login
         self.user_password = password
         self.session_string = ''
-        if debug:
-            self._debug()
 
     def _downloadFile(self, download_url):
         resp = None
