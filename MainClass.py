@@ -104,8 +104,6 @@ class MainClass:
 
             event_dict_file = '%s/%s.json' % (self.google['calendars_json_dir'], group_symbol)
 
-            self.g_cal_api.removeAllCalendars()
-
             if group_symbol in self.calendars:
                 self.g_cal_api.setCalendar(self.calendars[group_symbol], event_dict_file)
             else:  # cal adress don't exist, create new cal

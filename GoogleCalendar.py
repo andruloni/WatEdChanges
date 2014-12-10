@@ -181,8 +181,8 @@ class GoogleCalendar:
     def deletePrivilege(self, acl_id):
         self._service.acl().delete(calendarId=self._calendar_id, ruleId=acl_id).execute()
 
-    def clearCalendar(self):
-        pass
+    def clearAllDataInCalendar(self):
+        self._service.calendars().clear(calendarId=self._calendar_id).execute()
 
     def removeCalendar(self):
         self._service.calendarList().delete(calendarId=self._calendar_id).execute()
@@ -192,7 +192,7 @@ class GoogleCalendar:
         while True:
             calendar_list = self._service.calendarList().list(pageToken=page_token).execute()
             for calendar_list_entry in calendar_list['items']:
-                self._service.calendarList().delete(calendarId=calendar_list_entry['id']).execute()
+                self._service.calendars().delete(calendarId=calendar_list_entry['id']).execute()
             page_token = calendar_list.get('nextPageToken')
             if not page_token:
                 break
